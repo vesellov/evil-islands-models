@@ -274,7 +274,7 @@ class Renderer(Widget):
         self.canvas['texture_id'] = 1
         self.canvas['projection_mat'] = Matrix().view_clip(-asp, asp, -1, 1, 1, 100, 1)
         self.canvas['modelview_mat'] = Matrix().look_at(
-            0, 0, 3,
+            0, 0, 2,
             0, 0, 0,
             0, 1, 0,
         )
@@ -357,7 +357,7 @@ class Renderer(Widget):
         ChangeState(line_color=(1.,1.,1.,1.))
         PopState()
         Color(1, 1, 1)
-        Rotate(-90, 1, 0, 0)
+        # Rotate(-90, 1, 0, 0)
         # UpdateNormalMatrix()
         self.container = InstructionGroup()
         PopMatrix()

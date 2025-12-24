@@ -1,5 +1,3 @@
-import os
-
 import res
 import mth
 
@@ -90,18 +88,18 @@ class SceneData(object):
         tex_buf = []
         for i in range(fig_data[1]):
             for j in range(4):
-                vert_buf.append([
+                vert_buf.append(mth.ei2xyz_list([
                     mth.trilinear([fig_data[13][i][0][k][j] for k in range(8)], coefs),
                     mth.trilinear([fig_data[13][i][1][k][j] for k in range(8)], coefs),
                     mth.trilinear([fig_data[13][i][2][k][j] for k in range(8)], coefs),
-                ])
+                ]))
         for i in range(fig_data[2]):
             for j in range(4):
-                norm_buf.append([
+                norm_buf.append(mth.ei2xyz_list([
                     fig_data[14][i][0][j],
                     fig_data[14][i][1][j],
                     fig_data[14][i][2][j],
-                ])
+                ]))
         for i in range(fig_data[3]):
             tex_buf.append(fig_data[15][i])
         idx = 0
@@ -152,11 +150,11 @@ class SceneData(object):
         for part_name in selected_parts:
             u.parts.append(part_name)
             part_info = data['bones'][part_name + '.bon']
-            u.parts_pos[part_name] = [
+            u.parts_pos[part_name] = mth.ei2xyz_list([
                 mth.trilinear([part_info[i][0] for i in range(8)], coefs),
                 mth.trilinear([part_info[i][1] for i in range(8)], coefs),
                 mth.trilinear([part_info[i][2] for i in range(8)], coefs),
-            ]
+            ])
             mesh = self.create_mesh_from_fig_data(
                 fig_data=data['figures'][part_name+'.fig'],
                 prefix=u.name + '_' + part_name,
@@ -175,15 +173,15 @@ class SceneData(object):
                 if anim_name not in u.animations:
                     u.animations[anim_name] = {}
                 u.animations[anim_name][part_name] = {
-                    'rotation_frames': animation_info[1],
-                    'translation_frames': animation_info[3],
+                    'rotation_frames': [mth.ei2quad_list(quad) for quad in animation_info[1]],
+                    'translation_frames': [mth.ei2xyz_list(coord) for coord in animation_info[3]],
                 }
                 if animation_info[4] != 0 and animation_info[5] != 0:
                     morphing_frames = []
                     for value in animation_info[6]:
                         morphing_frames.append([])
                         for i in range(animation_info[5]):
-                            morphing_frames[0].append(value[i])
+                            morphing_frames[0].append(mth.ei2xyz_list(value[i]))
                     u.animations[anim_name][part_name]['morphing_frames'] = morphing_frames
                 if not first_animation_name:
                     first_animation_name = anim_name

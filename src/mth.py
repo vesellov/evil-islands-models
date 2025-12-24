@@ -272,3 +272,35 @@ def trilinear(val, coefs=[0, 0, 0]):
     v2 = t1 + (t2 - t1) * coefs[0]
     # Trilinear interpolation by height
     return v1 + (v2 - v1) * coefs[2]
+
+
+# def ei2xyz(x, y, z):
+#     return -x, z, y
+#
+#
+# def ei2quad(w, x, y, z):
+#     return -x, z, y, w
+#
+#
+# def ei2xyz_list(list3):
+#     return [-list3[0], list3[2], list3[1]]
+#
+#
+# def ei2quad_list(list4):
+#     return [-list4[1], list4[3], list4[2], list4[0]]
+
+
+def ei2xyz(x, y, z):
+    return x, y, z
+
+
+def ei2quad(w, x, y, z):
+    return w, x, z, y
+
+
+def ei2xyz_list(list3):
+    return [list3[0], list3[1], list3[2]]
+
+
+def ei2quad_list(list4):
+    return [list4[0], list4[1], list4[2], list4[3]]
