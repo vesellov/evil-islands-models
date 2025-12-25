@@ -186,7 +186,7 @@ def read_fig_info(file_name):
         info.extend(read_uint(file, 6))
         read_uint(file)
         info.extend(read_uint(file, 2))
-        info[4] //= 3                
+        info[4] //= 3
         for _ in range(3):
             info.append([read_float(file, 3) for _ in range(n)])
         info.append(read_float(file, n))
@@ -282,24 +282,32 @@ def walk_tree(tree, parent, visitor, arr=None, dct=None):
 
 
 def read_lnk_info(file_name):
-    info = []
-    tree = {}
+    lst = []
     parents = {}
+    tree = {}
+    childs = {}
     with open(file_name, "rb") as file:
         for _ in range(read_uint(file)):
             name_len = read_uint(file)
             new_name = read_str(file, name_len)
             parent_name_len = read_uint(file)
             if parent_name_len == 0:
-                info = [new_name, []]
+                lst = [new_name, []]
                 parents[new_name] = None
+                if new_name not in childs:
+                    childs[new_name] = []
                 tree[new_name] = {}
             else:
                 parent_name = read_str(file, parent_name_len)
                 parents[new_name] = parent_name
-                add_child_to_list(info, parent_name, new_name)
+                if new_name not in childs:
+                    childs[new_name] = []
+                if parent_name not in childs:
+                    childs[parent_name] = []
+                childs[parent_name].append(new_name)
+                add_child_to_list(lst, parent_name, new_name)
                 add_child_to_dict(tree, parent_name, new_name)
-    return info, parents, tree
+    return lst, tree, parents, childs
 
 
 def read_res_filetree(file, return_dict=False):
@@ -414,7 +422,7 @@ def read_model_data(figures_res_file_path, model_name, dest_parent_dir, save_jso
     fig_count = 0
     lnk_count = 0
     bon_count = 0
-    anm_count = 0 
+    anm_count = 0
     with open(figures_res_file_path, 'rb') as figures_file:
         res_filetree_dict = read_res_filetree(figures_file, return_dict=True)
         res_mod_element = res_filetree_dict.get(model_name + '.mod')
@@ -429,12 +437,12 @@ def read_model_data(figures_res_file_path, model_name, dest_parent_dir, save_jso
                     # TODO: remove .fig file later
                 elif mod_element[0].endswith('.lnk'):
                     lnk_file_name = os.path.join(dest_dir, mod_element[0])
-                    lnk_info, lnk_parents, lnk_tree = read_lnk_info(lnk_file_name)
+                    lnk_list, lnk_tree, lnk_parents, lnk_childs = read_lnk_info(lnk_file_name)
                     lnk_count += 1
                     data['links'][mod_element[0]] = {
-                        'info': lnk_info,
-                        'parents': lnk_parents,
+                        'ordered_tree': lnk_list,
                         'tree': lnk_tree,
+                        'parents': lnk_parents,
                     }
                     # TODO: remove .lnk file later
             # TODO: remove .mod file later
@@ -463,7 +471,7 @@ def read_model_data(figures_res_file_path, model_name, dest_parent_dir, save_jso
                             anm_count += 1
             # TODO: remove .anm files later
         if _Debug:
-            print(f'loaded {anm_count} animations')        
+            print(f'loaded {anm_count} animations')
         res_bon_element = res_filetree_dict.get(model_name + '.bon')
         if res_bon_element:
             bon_file_name = unpack_res_element(figures_file, res_bon_element, dest_file_name=os.path.join(dest_dir, model_name + '.bon'))
@@ -478,7 +486,7 @@ def read_model_data(figures_res_file_path, model_name, dest_parent_dir, save_jso
                     bon_count += 1
             # TODO: remove .bon files later
         if _Debug:
-            print(f'loaded {bon_count} bones')        
+            print(f'loaded {bon_count} bones')
     if save_json:
         open(os.path.join(dest_parent_dir, model_name + '.json'), 'w').write(json.dumps(data, indent=2))
     return data

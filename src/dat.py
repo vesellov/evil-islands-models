@@ -31,6 +31,7 @@ class UnitData(object):
         self.meshes = {}
         self.parts = []
         self.parts_tree = {}
+        self.parts_tree_ordered = []
         self.parts_pos = {}
         self.parts_parents = {}
         self.textures = {}
@@ -52,14 +53,40 @@ class UnitData(object):
             current_part = next_parent
         return parents
 
-    def walk_parts(self, visitor_before, visitor_after, tree=None):
+    def walk_parts(self, visitor_before, visitor_after=None, tree=None):
         if tree is None:
             tree = self.parts_tree
         for part_name, other_parts in tree.items():
             if part_name in self.parts:
                 visitor_before(self, part_name)
                 self.walk_parts(visitor_before, visitor_after, other_parts)
-                visitor_after(self, part_name)
+                if visitor_after:
+                    visitor_after(self, part_name)
+
+    def walk_parts_ordered(self, visitor, ordered_tree=None, parent_part_name=None):
+        if ordered_tree is None:
+            ordered_tree = self.parts_tree_ordered
+        this_part_name = ordered_tree[0]
+        if this_part_name not in self.parts:
+            return
+        this_part_branches = ordered_tree[1]
+        visitor(this_part_name, parent_part_name)
+        if this_part_branches:
+            for branch in this_part_branches:
+                self.walk_parts_ordered(visitor, ordered_tree=branch, parent_part_name=this_part_name)
+
+    def walk_parts_before_after(self, visitor_before, visitor_after, ordered_tree=None, parent_part_name=None):
+        if ordered_tree is None:
+            ordered_tree = self.parts_tree_ordered
+        this_part_name = ordered_tree[0]
+        if this_part_name not in self.parts:
+            return
+        this_part_branches = ordered_tree[1]
+        visitor_before(this_part_name, parent_part_name)
+        if this_part_branches:
+            for branch in this_part_branches:
+                self.walk_parts_before_after(visitor_before, visitor_after, ordered_tree=branch, parent_part_name=this_part_name)
+        visitor_after(this_part_name, parent_part_name)
 
 
 class SceneData(object):
@@ -121,7 +148,7 @@ class SceneData(object):
             idx += 3
         self.meshes[name] = mesh
         if _Debug:
-            print(f'prepared mesh {name} with {idx} faces')
+            print(f'  prepared mesh <{name}> with {idx} faces')
         return mesh
     
     def create_unit_from_model_data(self, data, coefs=[0, 0, 0], selected_parts=[], excluded_parts=[], selected_animations=[], textures={'*': 'default.png'}):
@@ -131,9 +158,10 @@ class SceneData(object):
         u.template = data['template']
         u.name = u.template + str(_NextUnitID)
         u.textures = textures
-        parts_tree = data['links'][u.template+'.lnk']['info']
+        parts_tree = data['links'][u.template+'.lnk']['ordered_tree']
         u.parts_parents = data['links'][u.template+'.lnk']['parents']
         u.parts_tree = data['links'][u.template+'.lnk']['tree']
+        u.parts_tree_ordered = parts_tree
         ordered_parts_list = res.flat_tree(parts_tree)
         u.animations_loaded = selected_animations
         if not u.animations_loaded:
@@ -141,7 +169,7 @@ class SceneData(object):
         related_meshes = {}
         first_animation_name = None
         if _Debug:
-            print(f'about to prepare {u.name} in {len(ordered_parts_list)} parts')
+            print(f'about to prepare ({u.name}) in {len(ordered_parts_list)} parts')
         if not selected_parts:
             selected_parts = ordered_parts_list
         for exclude in excluded_parts:
@@ -186,9 +214,52 @@ class SceneData(object):
                 if not first_animation_name:
                     first_animation_name = anim_name
                 part_animations_loaded.append(anim_name)
-            if part_animations_loaded:
-                if _Debug:
-                    print(f'prepared {len(part_animations_loaded)} animations for {part_name}')
+
+        def _calculate_animations(part_name, parent_part_name):
+            bone_t = [0, 0, 0]
+            if part_name in u.parts_pos:
+                bone_t = u.parts_pos[part_name]
+            count = 0
+            for anim_name in u.animations_loaded:
+                animations = u.animations[anim_name]
+                if part_name not in animations:
+                    u.animations[anim_name][part_name] = u.animations[anim_name][parent_part_name].copy()
+                    continue
+                if parent_part_name:
+                    part_rotation_frames = animations[part_name]['rotation_frames']
+                    part_rotation_frames_calculated = []
+                    for i in range(len(part_rotation_frames)):
+                        parent_q = u.animations[anim_name][parent_part_name]['absolute_rotation_frames'][i]
+                        part_q = part_rotation_frames[i]
+                        final_q = mth.quaternion_multiply(part_q, parent_q)
+                        part_rotation_frames_calculated.append(final_q)
+                    u.animations[anim_name][part_name]['absolute_rotation_frames'] = part_rotation_frames_calculated
+                    part_translation_frames = animations[part_name]['translation_frames']
+                    part_translation_frames_calculated = []
+                    for i in range(len(part_translation_frames)):
+                        parent_q = u.animations[anim_name][parent_part_name]['absolute_rotation_frames'][i]
+                        parent_t = u.animations[anim_name][parent_part_name]['absolute_translation_frames'][i]                        
+                        part_t = mth.vec3plus(mth.quaternion_by_vector(parent_q, bone_t), parent_t)
+                        part_translation_frames_calculated.append(part_t)
+                    u.animations[anim_name][part_name]['absolute_translation_frames'] = part_translation_frames_calculated
+                else:
+                    part_rotation_frames = animations[part_name]['rotation_frames']
+                    part_rotation_frames_calculated = []
+                    for i in range(len(part_rotation_frames)):
+                        part_q = part_rotation_frames[i]
+                        part_rotation_frames_calculated.append(part_q)
+                    u.animations[anim_name][part_name]['absolute_rotation_frames'] = part_rotation_frames_calculated
+                    part_translation_frames = animations[part_name]['translation_frames']
+                    part_translation_frames_calculated = []
+                    for i in range(len(part_translation_frames)):
+                        part_t = part_translation_frames[i]
+                        part_translation_frames_calculated.append(mth.vec3plus(bone_t, part_t))
+                    u.animations[anim_name][part_name]['absolute_translation_frames'] = part_translation_frames_calculated
+                count += 1
+            if _Debug:
+                print(f'    calculated {count} animations for [{part_name}]')
+
+        u.walk_parts_ordered(_calculate_animations)
         u.animation_playing = first_animation_name
         self.units[u.name] = u
         return u

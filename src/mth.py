@@ -90,18 +90,20 @@ def quaternionToRotationMatrix(p:np.ndarray) -> np.ndarray:
     e1 = p[1]
     e2 = p[2]
     e3 = p[3]
+    return np.array([
+        [e0*e0 + e1*e1 - e2*e2 - e3*e3, 2*e1*e2 - 2*e0*e3, 2*e0*e2 + 2*e1*e3],
+        [2*e0*e3 + 2*e1*e2, e0*e0 - e1*e1 + e2*e2 - e3*e3, 2*e2*e3 - 2*e0*e1],
+        [2*e1*e3 - 2*e0*e2, 2*e0*e1 + 2*e2*e3, e0*e0 - e1*e1 - e2*e2 + e3*e3],
+    ])
 
-    # rotation_matrix = np.array([[e0*e0 + e1*e1 - e2*e2 - e3*e3, 2*e1*e2 - 2*e0*e3, 2*e0*e2 + 2*e1*e3],
-    #                             [2*e0*e3 + 2*e1*e2, e0*e0 - e1*e1 + e2*e2 - e3*e3, 2*e2*e3 - 2*e0*e1],
-    #                             [2*e1*e3 - 2*e0*e2, 2*e0*e1 + 2*e2*e3, e0*e0 - e1*e1 - e2*e2 + e3*e3]])        
 
-    rotation_matrix = [
-        [e0*e0 + e1*e1 - e2*e2 - e3*e3, 2*e1*e2 - 2*e0*e3, 2*e0*e2 + 2*e1*e3, 0.0],
-        [2*e0*e3 + 2*e1*e2, e0*e0 - e1*e1 + e2*e2 - e3*e3, 2*e2*e3 - 2*e0*e1, 0.0],
-        [2*e1*e3 - 2*e0*e2, 2*e0*e1 + 2*e2*e3, e0*e0 - e1*e1 - e2*e2 + e3*e3, 0.0],
+def quaternion_to_matrix(w, x, y, z, tx=0.0, ty=0.0, tz=0.0):
+    return [
+        [1.0 - 2.0 * y * y - 2.0 * z * z, 2.0 * x * y - 2.0 * w * z, 2.0 * x * z + 2.0 * w * y, tx],
+        [2.0 * x * y + 2.0 * w * z, 1.0-2.0 * x * x - 2.0 * z * z, 2.0 * y * z - 2.0 * w * x, ty],
+        [2.0 * x * z - 2.0 * w * y, 2.0 * y * z + 2.0 * w * x, 1.0 - 2.0 * x * x - 2.0 * y * y, tz],
         [0.0, 0.0, 0.0, 1.0],
     ]
-    return rotation_matrix
 
 
 def rotationMatrixToQuaternion(R:np.ndarray) -> np.ndarray:
@@ -242,21 +244,30 @@ def quaternionToEulerAngles(q:np.ndarray|list)->np.ndarray:
     return np.r_[roll, pitch, yaw]
 
 
-def quaternion_multiply(quaternion1, quaternion0):
-    w0, x0, y0, z0 = quaternion0
-    w1, x1, y1, z1 = quaternion1
-    # return np.array([
-    #     -x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-    #     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-    #     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-    #     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0,
-    # ], dtype=np.float64)
-    return [
-        -x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-        x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-        -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-        x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0,
-    ]
+def quaternion_multiply(q1, q2):
+    """Multiply quaternions q1*q2"""
+    a = q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3]
+    b = q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2]
+    c = q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1]
+    d = q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1] + q1[3]*q2[0]
+    return [a, b, c, d]
+
+
+def quaternion_conjugate(q):
+    """Returns the conjugate of a quaternion."""
+    w, x, y, z = q
+    return (w, -x, -y, -z)
+
+
+def quaternion_by_vector(q, v3):
+    # Conjugate of the rotation quaternion
+    q_conj = quaternion_conjugate(q)  
+    v4 = [0.0, v3[0], v3[1], v3[2]]  
+    # Perform the rotation
+    q_temp = quaternion_multiply(q, v4)
+    q_rotated = quaternion_multiply(q_temp, q_conj)
+    # Extract the vector part (w=0)
+    return q_rotated[1:]
 
 
 def trilinear(val, coefs=[0, 0, 0]):
@@ -274,33 +285,23 @@ def trilinear(val, coefs=[0, 0, 0]):
     return v1 + (v2 - v1) * coefs[2]
 
 
-# def ei2xyz(x, y, z):
-#     return -x, z, y
-#
-#
-# def ei2quad(w, x, y, z):
-#     return -x, z, y, w
-#
-#
-# def ei2xyz_list(list3):
-#     return [-list3[0], list3[2], list3[1]]
-#
-#
-# def ei2quad_list(list4):
-#     return [-list4[1], list4[3], list4[2], list4[0]]
+def vec3plus(v1, v2):
+    return [v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]]
 
 
 def ei2xyz(x, y, z):
-    return x, y, z
+    return -x, z, y    
 
 
 def ei2quad(w, x, y, z):
-    return w, x, z, y
-
-
+    return w, -x, z, y
+    
+    
 def ei2xyz_list(list3):
-    return [list3[0], list3[1], list3[2]]
+    t = ei2xyz(list3[0], list3[1], list3[2])
+    return [t[0], t[1], t[2]]
 
 
 def ei2quad_list(list4):
-    return [list4[0], list4[1], list4[2], list4[3]]
+    t = ei2quad(list4[0], list4[1], list4[2], list4[3])
+    return [t[0], t[1], t[2], t[3]]
